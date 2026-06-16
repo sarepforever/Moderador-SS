@@ -271,7 +271,20 @@ header{background:rgba(8,12,20,0.9);backdrop-filter:blur(20px);-webkit-backdrop-
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
-const ANTHROPIC_API_KEY = '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';
+let ANTHROPIC_API_KEY = '';
+
+async function loadApiKey() {
+  try {
+    var snap = await get(ref(db, 'config/KeyAntropi'));
+    if (snap.exists()) {
+      ANTHROPIC_API_KEY = snap.val();
+    } else {
+      console.error('API key no encontrada en Firebase.');
+    }
+  } catch(e) {
+    console.error('Error cargando API key:', e);
+  }
+}
 const firebaseConfig = {
   apiKey:"AIzaSyCr_va6hzC1vrKL9Sva-4ssJIPncuG6YP8",
   authDomain:"soft-skills-4a879.firebaseapp.com",
@@ -371,7 +384,7 @@ function renderParticipants(data){
 
 document.getElementById('btn-analyze').addEventListener('click',analyzeTeam);
 
-function analyzeTeam(){
+async function analyzeTeam(){
   var done=Object.values(allParticipantsData).filter(function(p){return p.completado;});
   if(done.length<2)return;
   document.getElementById('team-loading').classList.add('visible');
@@ -403,6 +416,7 @@ function analyzeTeam(){
     +'"fortaleza_colectiva":"superpoder del equipo como conjunto en una oracion"'
     +'}';
 
+  await loadApiKey();
   fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:prompt}]})})
   .then(function(res){return res.json();})
   .then(function(data){
