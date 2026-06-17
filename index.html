@@ -129,7 +129,10 @@ header{background:rgba(8,12,20,0.9);backdrop-filter:blur(20px);-webkit-backdrop-
 .participant-card.visible{opacity:1;transform:translateY(0);transition:opacity 0.4s ease,transform 0.4s ease,box-shadow 0.2s}
 .participant-card:hover{box-shadow:0 8px 32px rgba(0,0,0,0.3);transform:translateY(-2px)}
 .participant-card.done{border-left-color:var(--green);box-shadow:0 4px 20px rgba(0,0,0,0.2),-2px 0 16px rgba(16,185,129,0.1)}
-.participant-card.pending{border-left-color:var(--orange)}
+.participant-card.progress{border-left-color:var(--neon);box-shadow:0 4px 20px rgba(0,0,0,0.2),-2px 0 16px rgba(79,158,255,0.1)}
+.participant-card.joined{border-left-color:rgba(255,255,255,0.15)}
+.pc-status.progress{color:var(--neon)}
+.pc-status.joined{color:var(--muted)}
 
 .pc-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .pc-avatar{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;border:1px solid var(--border)}
@@ -351,30 +354,67 @@ function updateAnalyzeButton(data){
 function renderParticipants(data){
   var keys=Object.keys(data);
   var done=keys.filter(function(k){return data[k].completado;}).length;
+  var inProgress=keys.filter(function(k){return !data[k].completado&&data[k].estado==='en_progreso';}).length;
+  var joined=keys.filter(function(k){return !data[k].completado&&data[k].estado!=='en_progreso';}).length;
+
   document.getElementById('stat-total').textContent=keys.length;
   document.getElementById('stat-done').textContent=done;
   document.getElementById('stat-pending').textContent=keys.length-done;
+
   var grid=document.getElementById('participants-grid');
   grid.innerHTML='';
-  if(keys.length===0){grid.innerHTML='<div id="empty-state"><div class="es-icon">👥</div><p>Aún no hay participantes.<br>Comparte el link para que comiencen.</p></div>';return;}
-  keys.forEach(function(key,idx){
-    var p=data[key],isDone=p.completado;
-    var card=document.createElement('div');
-    card.className='participant-card '+(isDone?'done':'pending');
+  if(keys.length===0){
+    grid.innerHTML='<div id="empty-state"><div class="es-icon">👥</div><p>Aún no hay participantes.<br>Comparte el link para que comiencen.</p></div>';
+    return;
+  }
 
+  keys.forEach(function(key,idx){
+    var p=data[key];
+    var isDone=p.completado;
+    var isProgress=!isDone&&p.estado==='en_progreso';
+    var progreso=p.progreso||0;
+
+    var cardClass=isDone?'done':isProgress?'progress':'joined';
+    var card=document.createElement('div');
+    card.className='participant-card '+cardClass;
+
+    // AVATAR & STATUS
+    var avatar=isDone?'✅':isProgress?'⚡':'👤';
+    var statusText=isDone?'Perfil completado':isProgress?'Completando pirámide... '+progreso+'%':'Acaba de unirse';
+    var statusClass=isDone?'done':isProgress?'progress':'joined';
+
+    // PROGRESS BAR (for in-progress)
+    var progressBarHtml='';
+    if(isProgress){
+      progressBarHtml='<div style="margin:8px 0;height:3px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">'
+        +'<div style="height:100%;width:'+progreso+'%;background:linear-gradient(90deg,#7B61FF,#4F9EFF);border-radius:4px;transition:width 0.4s ease"></div>'
+        +'</div>';
+    }
+
+    // PYRAMID (only when done)
     var pyramidHtml='';
     if(isDone&&p.piramide){
       pyramidHtml='<div class="pc-pyramid">';
       [{items:p.piramide.nivel1,cls:'lvl1'},{items:p.piramide.nivel2,cls:'lvl2'},{items:p.piramide.nivel3,cls:'lvl3'}].forEach(function(l){
-        if(l.items&&l.items.length){pyramidHtml+='<div class="pc-level-row">';l.items.forEach(function(v){if(v)pyramidHtml+='<span class="pc-chip '+l.cls+'">'+v.icon+' '+v.name+'</span>';});pyramidHtml+='</div>';}
+        if(l.items&&l.items.length){
+          pyramidHtml+='<div class="pc-level-row">';
+          l.items.forEach(function(v){if(v)pyramidHtml+='<span class="pc-chip '+l.cls+'">'+v.icon+' '+v.name+'</span>';});
+          pyramidHtml+='</div>';
+        }
       });
       pyramidHtml+='</div>';
     }
+
     var titularHtml=isDone&&p.analisis&&p.analisis.titular?'<div class="pc-titular">✨ '+p.analisis.titular+'</div>':'';
     var commHtml=isDone&&p.analisis&&p.analisis.como_comunicarse?'<div class="pc-section-label">💬 Cómo comunicarse</div><ul class="pc-comm-list">'+p.analisis.como_comunicarse.claves.slice(0,3).map(function(c){return '<li>→ '+c+'</li>';}).join('')+'</ul>':'';
     var fortHtml=isDone&&p.analisis&&p.analisis.fortalezas?'<div class="pc-section-label">⚡ Fortalezas</div><div class="pc-fortalezas">'+p.analisis.fortalezas.slice(0,3).map(function(f){return '<div class="pc-fortaleza">✅ '+f+'</div>';}).join('')+'</div>':'';
 
-    card.innerHTML='<div class="pc-header"><div class="pc-avatar">'+(isDone?'✅':'⏳')+'</div><div><div class="pc-name">'+p.nombre+'</div><div class="pc-status '+(isDone?'done':'pending')+'">'+(isDone?'Perfil completado':'En progreso...')+'</div></div></div>'
+    card.innerHTML='<div class="pc-header">'
+      +'<div class="pc-avatar">'+avatar+'</div>'
+      +'<div><div class="pc-name">'+p.nombre+'</div>'
+      +'<div class="pc-status '+statusClass+'">'+statusText+'</div></div>'
+      +'</div>'
+      +progressBarHtml
       +titularHtml+pyramidHtml+commHtml+fortHtml
       +(isDone?'<button class="btn-ver">Ver perfil completo →</button>':'');
 
